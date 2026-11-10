@@ -152,7 +152,7 @@
     "@storybook/addon-themes": "^8.6.12",
     "@storybook/blocks": "^8.6.12",
     "@storybook/test": "^8.6.15",
-    "@storybook/web-components": "^8.6.12",
+    "@storybook/web-components": "^10.6.6",
     "@storybook/web-components-vite": "^8.6.12",
     "@tailwindcss/typography": "^0.5.20",
     "@trimble-oss/modus-icons": "^1.21.0",
