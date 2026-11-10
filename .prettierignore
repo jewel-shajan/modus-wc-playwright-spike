@@ -15,4 +15,5 @@ docs/component-graph/component-graph.json
 docs/component-graph/component-graph.mmd
 .cursor/hooks/state/**
 .playwright-mcp
+playwright_automation
 *.snap
