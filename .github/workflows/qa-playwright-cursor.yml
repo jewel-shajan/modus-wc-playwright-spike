@@ -1,0 +1,578 @@
+name: QA Playwright
+
+# Starts when an allowlisted QA GitHub user comments "ready for QA" on a pull request.
+# Cursor CLI runs on the QA account as Composer 2.5, syncs graph-scoped Playwright
+# cases, and this workflow runs those cases and posts the result. It does not merge.
+#
+# Settings → Secrets and variables → Actions:
+# - Secret CURSOR_API_KEY: API key from the QA Cursor account.
+# - Variable QA_GITHUB_LOGINS: comma-separated GitHub usernames allowed to start a run.
+# - Secret MASTER_SHEET_CSV (optional): CSV export of the QA master sheet.
+#
+# Branch protection on main must require the status check "qa-playwright".
+# The prompt and the report script are read from the default branch, not the PR branch.
+# A later push has no status until QA comments "ready for QA" again.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: qa-playwright-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: >
+      github.event.issue.pull_request &&
+      (
+        contains(github.event.comment.body, 'ready for QA') ||
+        contains(github.event.comment.body, 'Ready for QA') ||
+        contains(github.event.comment.body, 'ready for qa') ||
+        contains(github.event.comment.body, 'READY FOR QA') ||
+        contains(github.event.comment.body, 'Ready For QA')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+      report: ${{ steps.gate.outputs.report }}
+      reason: ${{ steps.gate.outputs.reason }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+      head_ref: ${{ steps.gate.outputs.head_ref }}
+      base_ref: ${{ steps.gate.outputs.base_ref }}
+    steps:
+      - name: Decide whether this comment starts QA
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          QA_GITHUB_LOGINS: ${{ vars.QA_GITHUB_LOGINS }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          proceed=false
+          report=false
+          reason=
+          head_sha=
+          head_ref=
+          base_ref=
+
+          finish() {
+            {
+              echo "proceed=${proceed}"
+              echo "report=${report}"
+              echo "reason=${reason}"
+              echo "head_sha=${head_sha}"
+              echo "head_ref=${head_ref}"
+              echo "base_ref=${base_ref}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          printf '%s\n' "$COMMENT_BODY" | tr '[:upper:]' '[:lower:]' > "$RUNNER_TEMP/comment.txt"
+          if ! grep -Eq '(^|[^a-z])ready[[:space:]]+for[[:space:]]+qa([^a-z]|$)' "$RUNNER_TEMP/comment.txt"; then
+            echo "Comment does not ask for QA."
+            finish
+          fi
+
+          load_pr() {
+            if ! gh pr view "$PR_NUMBER" --json headRefOid,headRefName,baseRefName,headRepository \
+              > "$RUNNER_TEMP/pr.json"; then
+              return 1
+            fi
+            head_sha=$(jq -r '.headRefOid' "$RUNNER_TEMP/pr.json")
+            head_ref=$(jq -r '.headRefName' "$RUNNER_TEMP/pr.json")
+            base_ref=$(jq -r '.baseRefName' "$RUNNER_TEMP/pr.json")
+            head_repo=$(jq -r '.headRepository.nameWithOwner' "$RUNNER_TEMP/pr.json")
+          }
+
+          if [ -z "${QA_GITHUB_LOGINS}" ]; then
+            echo "QA_GITHUB_LOGINS is empty."
+            load_pr || true
+            report=true
+            reason=missing-allowlist
+            finish
+          fi
+
+          allowed=false
+          IFS=',' read -ra users <<< "$QA_GITHUB_LOGINS"
+          for user in "${users[@]}"; do
+            user=$(printf '%s' "$user" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [ "$user" = "$COMMENT_AUTHOR" ]; then
+              allowed=true
+            fi
+          done
+          if [ "$allowed" != true ]; then
+            echo "Author ${COMMENT_AUTHOR} is not in QA_GITHUB_LOGINS."
+            finish
+          fi
+
+          if ! load_pr; then
+            echo "Could not read the pull request."
+            report=true
+            reason=metadata
+            finish
+          fi
+
+          if [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
+            echo "Head repository is ${head_repo}."
+            report=true
+            reason=fork
+            finish
+          fi
+
+          case "$head_ref" in
+            *..*|*" "*|-* )
+              echo "Refusing head ref ${head_ref}."
+              report=true
+              reason=fork
+              finish
+              ;;
+          esac
+
+          if [ -z "${CURSOR_API_KEY}" ]; then
+            echo "CURSOR_API_KEY is empty."
+            report=true
+            reason=missing-api-key
+            finish
+          fi
+
+          proceed=true
+          report=true
+          finish
+
+      - name: Checkout pull request head
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.gate.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch base branch
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          BASE_REF: ${{ steps.gate.outputs.base_ref }}
+        run: git fetch origin "${BASE_REF}"
+
+      - name: Use Node.js
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Playwright package
+        id: deps
+        if: steps.gate.outputs.proceed == 'true'
+        run: |
+          unset GH_TOKEN GITHUB_TOKEN NODE_AUTH_TOKEN || true
+          npm ci --prefix playwright_automation
+
+      - name: Restore master sheet
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          MASTER_SHEET_CSV_CONTENT: ${{ secrets.MASTER_SHEET_CSV }}
+        run: |
+          if [ -n "${MASTER_SHEET_CSV_CONTENT}" ]; then
+            mkdir -p playwright_automation/.agent
+            printf '%s\n' "$MASTER_SHEET_CSV_CONTENT" > playwright_automation/.agent/master-sheet.csv
+          fi
+
+      - name: Install Cursor CLI
+        id: cli
+        if: steps.gate.outputs.proceed == 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          if [ -x "$HOME/.cursor/bin/agent" ]; then
+            echo "$HOME/.cursor/bin" >> "$GITHUB_PATH"
+          elif [ -x "$HOME/.local/bin/agent" ]; then
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          else
+            echo "Cursor CLI did not install an agent binary."
+            exit 1
+          fi
+          mkdir -p "$HOME/.cursor"
+          cat > "$HOME/.cursor/cli-config.json" << 'EOF'
+          {
+            "permissions": {
+              "allow": [
+                "Shell(npm)",
+                "Shell(npx)",
+                "Shell(node)",
+                "Shell(git)",
+                "Shell(gh)",
+                "Read(src/**)",
+                "Read(docs/**)",
+                "Read(playwright_automation/**)",
+                "Write(playwright_automation/tests/**)",
+                "Write(playwright_automation/pages/**)",
+                "Write(playwright_automation/specs/**)",
+                "Write(playwright_automation/assertions/**)",
+                "Write(playwright_automation/fixtures/**)",
+                "Write(playwright_automation/.agent/**)"
+              ],
+              "deny": [
+                "Shell(git:push)",
+                "Shell(git:commit)",
+                "Shell(gh:pr:merge)",
+                "Shell(gh:pr:comment)",
+                "Shell(gh:pr:review)",
+                "Shell(gh:pr:close)",
+                "Shell(rm)",
+                "Write(.github/**)",
+                "Write(src/**)",
+                "Write(package.json)",
+                "Write(package-lock.json)",
+                "Write(**/.env*)",
+                "Read(**/.env*)"
+              ]
+            }
+          }
+          EOF
+
+      - name: Load sync prompt from the default branch
+        id: prompt
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch origin "${DEFAULT_BRANCH}"
+          git show "origin/${DEFAULT_BRANCH}:.github/prompts/qa-playwright-sync.md" > "$RUNNER_TEMP/qa-prompt.md"
+
+      - name: Sync tests with Cursor CLI
+        id: agent
+        if: steps.gate.outputs.proceed == 'true'
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          BASE_SHA: origin/${{ steps.gate.outputs.base_ref }}
+          PLAYWRIGHT_SCOPE_PARENTS: '1'
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/qa-sync"
+          agent --version
+          agent status || true
+          agent -p --force --trust --sandbox disabled --model composer-2.5 --output-format text \
+            "$(cat "$RUNNER_TEMP/qa-prompt.md")" | tee "$RUNNER_TEMP/qa-sync/agent.log"
+
+      - name: Collect the test sync patch
+        id: collect
+        if: steps.gate.outputs.proceed == 'true' && (success() || failure())
+        env:
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
+          CLI_OUTCOME: ${{ steps.cli.outcome }}
+          PROMPT_OUTCOME: ${{ steps.prompt.outcome }}
+          AGENT_OUTCOME: ${{ steps.agent.outcome }}
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/qa-sync"
+          mkdir -p "$dest"
+          publish() {
+            rm -rf qa-sync-upload
+            mkdir -p qa-sync-upload
+            cp -a "$dest/." qa-sync-upload/ || true
+          }
+          trap publish EXIT
+
+          block() {
+            printf '%s\n' "$1" > "$dest/block.txt"
+            rm -f "$dest/patch.diff"
+            exit 1
+          }
+
+          if [ -f playwright_automation/.agent/qa-sync-notes.md ]; then
+            cp playwright_automation/.agent/qa-sync-notes.md "$dest/notes.md"
+          fi
+          rm -f playwright_automation/.agent/qa-sync-notes.md \
+            playwright_automation/.agent/scope.json \
+            playwright_automation/.agent/master-sheet.csv
+
+          if [ "$DEPS_OUTCOME" != "success" ]; then
+            block "Installing the Playwright package failed."
+          fi
+          if [ "$CLI_OUTCOME" != "success" ]; then
+            block "Installing Cursor CLI failed."
+          fi
+          if [ "$PROMPT_OUTCOME" != "success" ]; then
+            block "The sync prompt is not on the default branch yet (.github/prompts/qa-playwright-sync.md)."
+          fi
+          if [ "$AGENT_OUTCOME" != "success" ]; then
+            block "Cursor CLI did not finish. The log tail is below in the pull request comment."
+          fi
+
+          git add -- \
+            playwright_automation/tests \
+            playwright_automation/pages \
+            playwright_automation/specs \
+            playwright_automation/assertions \
+            playwright_automation/fixtures
+
+          disallowed=$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sed '/^$/d' | sort -u
+          )
+          if [ -n "$disallowed" ]; then
+            {
+              echo "Cursor CLI edited files outside the Playwright test package. Those edits were not committed."
+              printf '%s\n' "$disallowed"
+            } > "$dest/block.txt"
+            rm -f "$dest/patch.diff"
+            git reset -q
+            exit 1
+          fi
+
+          git diff --cached -U0 -- '*.spec.ts' | grep '^\+.*test\.skip' > "$dest/skips.txt" || true
+          git diff --cached --name-only > "$dest/changed-files.txt"
+          git diff --cached --binary > "$dest/patch.diff"
+          git reset -q
+
+      - name: Upload sync artifact
+        if: steps.gate.outputs.proceed == 'true' && (success() || failure())
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qa-sync
+          path: qa-sync-upload
+          if-no-files-found: ignore
+          retention-days: 7
+
+  verify:
+    needs: sync
+    if: always() && needs.sync.result != 'cancelled' && needs.sync.outputs.report == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - name: Report a configuration or fork block
+        if: needs.sync.outputs.reason != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REASON: ${{ needs.sync.outputs.reason }}
+          HEAD_SHA: ${{ needs.sync.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          case "$REASON" in
+            missing-allowlist)
+              detail="Set the Actions variable \`QA_GITHUB_LOGINS\` to the GitHub usernames that may start this run (comma-separated)."
+              ;;
+            missing-api-key)
+              detail="Set the Actions secret \`CURSOR_API_KEY\` to an API key from the QA Cursor account. The CLI uses that account and Composer 2.5."
+              ;;
+            fork)
+              detail="The pull request head is not a branch in this repository, so the sync did not run and nothing was pushed."
+              ;;
+            *)
+              detail="The QA sync did not start (${REASON})."
+              ;;
+          esac
+          {
+            echo "## QA Playwright FAILED"
+            echo
+            echo "$detail"
+            echo
+            echo "This workflow does not merge. The qa-playwright status stays red until an allowlisted QA comment can complete a run."
+          } > "$RUNNER_TEMP/qa-comment.md"
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/qa-comment.md"
+          if [ -n "$HEAD_SHA" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+              -f state=failure \
+              -f context=qa-playwright \
+              -f description="QA Playwright did not start" \
+              -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
+          exit 1
+
+      - name: Checkout pull request head
+        if: needs.sync.outputs.proceed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.sync.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download sync artifact
+        if: needs.sync.outputs.proceed == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        continue-on-error: true
+        with:
+          name: qa-sync
+          path: qa-sync-upload
+
+      - name: Check sync block
+        id: block
+        if: needs.sync.outputs.proceed == 'true'
+        run: |
+          if [ ! -d qa-sync-upload ]; then
+            mkdir -p qa-sync-upload
+            echo "The sync artifact was not uploaded." > qa-sync-upload/block.txt
+          fi
+          if [ -s qa-sync-upload/block.txt ]; then
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stop=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Use Node.js
+        if: needs.sync.outputs.proceed == 'true' && steps.block.outputs.stop != 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+          cache: npm
+
+      - name: Install, build, and install Chromium
+        id: build
+        if: needs.sync.outputs.proceed == 'true' && steps.block.outputs.stop != 'true'
+        run: |
+          unset GH_TOKEN GITHUB_TOKEN NODE_AUTH_TOKEN || true
+          npm ci
+          npm ci --prefix playwright_automation
+          npm run build:ci
+          npm --prefix playwright_automation exec playwright install --with-deps chromium
+
+      - name: Apply the test sync and push it
+        id: apply
+        if: needs.sync.outputs.proceed == 'true' && steps.block.outputs.stop != 'true' && steps.build.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ needs.sync.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          patch=qa-sync-upload/patch.diff
+          if [ ! -s "$patch" ]; then
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git apply --index "$patch"; then
+            echo "Applying the test sync patch failed, so the updated cases were not pushed." > qa-sync-upload/block.txt
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git -c user.name='modus-qa-playwright' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "test: sync Playwright cases for QA verification"
+          if ! git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${HEAD_REF}"; then
+            echo "Pushing the test sync to ${HEAD_REF} was rejected. GitHub Actions needs permission to push to that branch." > qa-sync-upload/block.txt
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "applied=true" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve graph scope
+        id: scope
+        if: needs.sync.outputs.proceed == 'true' && steps.block.outputs.stop != 'true' && steps.apply.outcome == 'success'
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          BASE_SHA: origin/${{ needs.sync.outputs.base_ref }}
+          PLAYWRIGHT_SCOPE_PARENTS: '1'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin "${{ needs.sync.outputs.base_ref }}"
+          npm run agent:scope
+
+      - name: Run graph-scoped Playwright
+        id: test
+        if: needs.sync.outputs.proceed == 'true' && steps.block.outputs.stop != 'true' && steps.scope.outcome == 'success'
+        env:
+          PLAYWRIGHT_SCOPE_PARENTS: '1'
+          CI: 'true'
+        run: |
+          unset GH_TOKEN GITHUB_TOKEN NODE_AUTH_TOKEN || true
+          npm run test:playwright:scoped
+
+      - name: Upload Playwright report
+        if: needs.sync.outputs.proceed == 'true' && steps.test.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qa-playwright-report
+          path: |
+            playwright_automation/reports
+            playwright_automation/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish the QA comment and status
+        if: needs.sync.outputs.proceed == 'true' && (success() || failure())
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_SHA: ${{ needs.sync.outputs.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          SYNC_RESULT: ${{ needs.sync.result }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          APPLY_RESULT: ${{ steps.apply.outcome }}
+          TEST_RESULT: ${{ steps.test.outcome }}
+          STOP: ${{ steps.block.outputs.stop }}
+        run: |
+          set -euo pipefail
+          result=failure
+          if [ "$STOP" = "true" ] || [ "$SYNC_RESULT" != "success" ]; then
+            result=sync-failed
+          elif [ "$BUILD_RESULT" = "failure" ] || [ "$APPLY_RESULT" = "failure" ]; then
+            result=sync-failed
+          elif [ -s qa-sync-upload/skips.txt ]; then
+            result=failure
+          elif [ "$TEST_RESULT" = "success" ]; then
+            result=success
+          fi
+
+          mkdir -p qa-sync-upload
+          if git fetch origin "${DEFAULT_BRANCH}" \
+            && git show "origin/${DEFAULT_BRANCH}:playwright_automation/scripts/report-ci.mjs" > "$RUNNER_TEMP/report-ci.mjs"; then
+            node "$RUNNER_TEMP/report-ci.mjs" \
+              --out "$RUNNER_TEMP/qa-comment.md" \
+              --result "$result" \
+              --junit playwright_automation/reports/results.xml \
+              --scope playwright_automation/.agent/scope.json \
+              --notes qa-sync-upload/notes.md \
+              --skips qa-sync-upload/skips.txt \
+              --block qa-sync-upload/block.txt \
+              --changed qa-sync-upload/changed-files.txt \
+              --agent-log qa-sync-upload/agent.log
+          else
+            {
+              echo "## QA Playwright FAILED"
+              echo
+              echo "The report script on the default branch could not be loaded, so the full failure table was not built. Result: ${result}."
+            } > "$RUNNER_TEMP/qa-comment.md"
+          fi
+
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/qa-comment.md"
+
+          sha="$HEAD_SHA"
+          if [ "$APPLY_RESULT" = "success" ] && [ -s qa-sync-upload/patch.diff ]; then
+            sha=$(git rev-parse HEAD)
+          fi
+          if [ "$result" = "success" ]; then
+            state=success
+            description="Graph-scoped Playwright passed"
+          else
+            state=failure
+            description="Graph-scoped Playwright failed"
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+            -f state="$state" \
+            -f context=qa-playwright \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          if [ "$result" != "success" ]; then
+            exit 1
+          fi

@@ -1,0 +1,24 @@
+{
+  "name": "@trimble-oss/modus-wc-playwright_automation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "agent:scope": "tsx scripts/resolve-scope.ts",
+    "agent:plan": "tsx scripts/build-plan.ts",
+    "agent:audit": "tsx scripts/coverage-audit.ts",
+    "agent:apply": "tsx scripts/apply-plan.ts",
+    "agent:qa": "tsx scripts/agent-qa.ts",
+    "report:ci": "node scripts/report-ci.mjs",
+    "test:chromium": "playwright test --project=chromium",
+    "test:scoped": "tsx scripts/run-scoped.ts",
+    "test:browsers": "playwright test",
+    "report:html": "playwright show-report reports"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.51.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

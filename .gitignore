@@ -43,7 +43,23 @@ coverage/
 # PR evidence screenshots (post on PR only; do not commit)
 .github/pr-assets/
 
+# Local Google OAuth for MCP (keep under %USERPROFILE%\.cursor\google instead)
+.cursor/google/
+
 # Playwright MCP local session artifacts (screenshots, snapshots)
 .playwright-mcp/
+
+# Playwright automation artifacts
+playwright_automation/node_modules/
+playwright_automation/test-results/
+playwright_automation/reports/
+playwright_automation/allure-results/
+playwright_automation/allure-report/
+playwright_automation/playwright/.cache/
+playwright_automation/.agent/master-sheet.csv
+playwright_automation/.agent/scope.json
+playwright_automation/.agent/qa-sync-notes.md
+playwright_automation/.agent/ci-sync/
+qa-sync-upload/
 
 nuget-output/

@@ -1,0 +1,78 @@
+name: Playwright
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly matrix on main. Pull requests stay Chromium-only.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: playwright-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ github.event_name == 'pull_request' && fromJSON('["chromium"]') || fromJSON('["chromium","firefox","webkit"]') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+          cache: npm
+
+      - name: Install library dependencies
+        run: npm ci
+
+      - name: Install Playwright package
+        run: npm ci --prefix playwright_automation
+
+      - name: Build components
+        run: npm run build:ci
+
+      - name: Install browser
+        working-directory: playwright_automation
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Resolve graph scope
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: origin/${{ github.event.pull_request.base.ref }}
+        run: npm run agent:scope
+
+      - name: Run tests
+        working-directory: playwright_automation
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npm run test:scoped -- --project=${{ matrix.browser }}
+          else
+            npx playwright test --project=${{ matrix.browser }}
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: |
+            playwright_automation/reports
+            playwright_automation/test-results
+          if-no-files-found: ignore
+          retention-days: 7
