@@ -53,6 +53,7 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
           QA_GITHUB_LOGINS: ${{ vars.QA_GITHUB_LOGINS }}
@@ -86,7 +87,7 @@ jobs:
           fi
 
           load_pr() {
-            if ! gh pr view "$PR_NUMBER" --json headRefOid,headRefName,baseRefName,headRepository \
+            if ! gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,headRefName,baseRefName,headRepository \
               > "$RUNNER_TEMP/pr.json"; then
               return 1
             fi
@@ -365,6 +366,7 @@ jobs:
         if: needs.sync.outputs.reason != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
           REASON: ${{ needs.sync.outputs.reason }}
           HEAD_SHA: ${{ needs.sync.outputs.head_sha }}
@@ -391,7 +393,7 @@ jobs:
             echo
             echo "This workflow does not merge. The qa-playwright status stays red until an allowlisted QA comment can complete a run."
           } > "$RUNNER_TEMP/qa-comment.md"
-          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/qa-comment.md"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/qa-comment.md"
           if [ -n "$HEAD_SHA" ]; then
             gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
               -f state=failure \
