@@ -36,12 +36,12 @@ Allowed paths only:
 
 For each changed component:
 
-| Plan action | What you do |
-| --- | --- |
-| `keep` | Leave the test. Extend it when the sheet or acceptance criteria need another assertion. |
-| `add` | Add a real Playwright test in the six-file layout (stories, props, a11y, css, shadow-dom, show-code). Tag `@master`. Put `[sheet:ID]` or `[tc:ID]` in the title when an id exists. |
-| `remove` | Delete the test that references that id. |
-| `manual` | Do not automate. Record it in the notes. |
+| Plan action | What you do                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keep`      | Leave the test. Extend it when the sheet or acceptance criteria need another assertion.                                                                                            |
+| `add`       | Add a real Playwright test in the six-file layout (stories, props, a11y, css, shadow-dom, show-code). Tag `@master`. Put `[sheet:ID]` or `[tc:ID]` in the title when an id exists. |
+| `remove`    | Delete the test that references that id.                                                                                                                                           |
+| `manual`    | Do not automate. Record it in the notes.                                                                                                                                           |
 
 Edit the spec until the scenario list matches the sheet, issue, and graph, then set `Status: **READY**`. Implement `add` rows as real tests. Do not add `test.skip`. Do not run `agent:apply` (it writes skip stubs).
 
