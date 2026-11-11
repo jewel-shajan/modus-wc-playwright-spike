@@ -18,8 +18,8 @@ const targetPath = join(root, 'src/styles/modus-wc-variables.css');
 
 const read = (path, label) => {
   if (!existsSync(path)) {
-    console.error(`Missing required file: ${label} (${path})`);  
-    process.exit(1);  
+    console.error(`Missing required file: ${label} (${path})`);
+    process.exit(1);
   }
   return readFileSync(path, 'utf8');
 };
@@ -159,4 +159,4 @@ ${themeBlocks}
 
 writeFileSync(targetPath, output, 'utf8');
 
-console.log(`Generated: ${targetPath}`);  
+console.log(`Generated: ${targetPath}`);
