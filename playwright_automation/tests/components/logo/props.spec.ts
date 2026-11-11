@@ -99,4 +99,17 @@ test.describe('Logo props @master', () => {
     const viewBox = await svg.getAttribute('viewBox');
     expect(viewBox).not.toBe(CONNECT_WORDMARK_VIEWBOX);
   });
+
+  test('should render developer_console self-contained wordmark without combined split [tc:LOGO-PROPS-8] @master', async ({
+    page,
+  }) => {
+    const logoPage = new LogoPage(page);
+    await logoPage.gotoDefault({ name: 'developer_console', emblem: false });
+    await logoPage.syncName('developer_console');
+    await expect(logoPage.logoRoot).toHaveClass(/logo-full/);
+    await expect(logoPage.logoRoot).not.toHaveClass(/logo-combined/);
+    await expect(logoPage.host.locator('.logo-combined-emblem')).toHaveCount(0);
+    await expect(logoPage.primarySvg).toBeAttached();
+    await expect(logoPage.host.locator('.logo-accent').first()).toBeAttached();
+  });
 });

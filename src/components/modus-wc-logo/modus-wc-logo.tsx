@@ -6,11 +6,11 @@ import {
   Host,
   Prop,
 } from '@stencil/core';
+import { LOGO_SVGS } from '../../svg-assets/generated/logo-svg-data';
 import { handleShadowDOMStyles } from '../base-component';
+import { LogoName } from '../types';
 import { Attributes, inheritAriaAttributes } from '../utils';
 import { LOGO_VARIANTS } from './logo-constants';
-import { LOGO_SVGS } from '../../svg-assets/generated/logo-svg-data';
-import { LogoName } from '../types';
 
 interface LogoSvgProps {
   svgText: string;

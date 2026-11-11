@@ -51,6 +51,13 @@ const config: StorybookConfig = {
 
     return mergeConfig(config, {
       ...esbuildCompat,
+      server: {
+        watch: {
+          // Playwright writes reports here while tests run. Vite's watcher
+          // crashes with EBUSY if it tries to follow those files on Windows.
+          ignored: ['**/playwright_automation/**'],
+        },
+      },
       build: {
         // this is set to 'dist' by default which causes hot-reloading for stencil components to break
         // see: https://vitejs.dev/config/server-options.html#server-watch
