@@ -89,6 +89,7 @@ export default [
       'src/providers/theme/component-css-content.ts',
       'storybook-static/**',
       'www/**',
+      'playwright_automation/**',
     ],
   },
   {

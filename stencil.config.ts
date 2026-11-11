@@ -120,6 +120,7 @@ export const config: Config = {
   testing: {
     browserHeadless: 'shell',
     modulePathIgnorePatterns: ['.wireit'],
+    testPathIgnorePatterns: ['/node_modules/', '/playwright_automation/'],
     collectCoverageFrom: [
       'src/components/**/modus-wc-*.tsx',
       'src/utils/**/*.ts',

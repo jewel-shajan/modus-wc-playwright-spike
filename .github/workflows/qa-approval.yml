@@ -6,6 +6,12 @@ on:
 
 permissions: {}
 
+# Each push used to start a new qa-review deployment while older ones stayed
+# "waiting", so the PR kept showing Expected even after a later run succeeded.
+concurrency:
+  group: qa-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   qa-approval:
     runs-on: ubuntu-latest
