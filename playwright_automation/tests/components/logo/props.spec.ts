@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   CONNECT_EMBLEM_VIEWBOX,
   CONNECT_WORDMARK_VIEWBOX,
+  DEVELOPER_CONSOLE_WORDMARK_VIEWBOX,
   TRIMBLE_ACCENT_FILL,
   TRIMBLE_EMBLEM_VIEWBOX,
   TRIMBLE_WORDMARK_VIEWBOX,
@@ -110,6 +111,10 @@ test.describe('Logo props @master', () => {
     await expect(logoPage.logoRoot).not.toHaveClass(/logo-combined/);
     await expect(logoPage.host.locator('.logo-combined-emblem')).toHaveCount(0);
     await expect(logoPage.primarySvg).toBeAttached();
+    await expectSvgViewBox(
+      logoPage.primarySvg,
+      DEVELOPER_CONSOLE_WORDMARK_VIEWBOX
+    );
     await expect(logoPage.host.locator('.logo-accent').first()).toBeAttached();
   });
 });
