@@ -21,7 +21,7 @@ export abstract class BaseStorybookPage {
   }
 
   /**
-   * Light-DOM hosts (`shadow: false`) reparent slotted nodes under internal
+   * Light-DOM hosts (`shadow: false`) move slotted nodes under internal
    * wrappers, so they are not direct children of the custom element.
    * Descendants of the host match both that tree and shadow hosts.
    */
