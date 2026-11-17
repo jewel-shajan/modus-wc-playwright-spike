@@ -19,9 +19,7 @@ export class NavbarPage extends BaseStorybookPage {
   }
 
   get mainMenuSlot(): Locator {
-    return this.page
-      .locator(`${this.hostSelector} > [slot="main-menu"]`)
-      .first();
+    return this.slot('main-menu');
   }
 
   async gotoDefault(

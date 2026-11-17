@@ -140,6 +140,8 @@ playwright_automation/
 
 Shared navigation and event listeners stay in fixtures and assertions. A listener is armed before the click or key. Starting both together drops the event and the test hangs until timeout.
 
+Slotted nodes on light-DOM hosts (`shadow: false`) are not direct children of the custom element. Page objects use `BaseStorybookPage.slot(name)`, which looks for `[slot="name"]` anywhere under the host. A `>` combinator (`modus-wc-navbar > [slot="main-menu"]`) misses content that Stencil moves under an internal wrapper such as the navbar toolbar.
+
 ## QA Master Sheet (Google)
 
 Manual cases live in the [QA Master Sheet](https://docs.google.com/spreadsheets/d/1MrnDnYSQWsIj45IMZK_1R0caCjHyu4PyO-P-3m06xjI/edit?gid=935899082). The QA workflow reads a CSV export from the `MASTER_SHEET_CSV` secret. Locally, put the same export at `playwright_automation/.agent/master-sheet.csv` before `npm run agent:plan`.

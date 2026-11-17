@@ -47,7 +47,9 @@ Edit the spec until the scenario list matches the sheet, issue, and graph, then 
 
 Parent suites are in scope because `PLAYWRIGHT_SCOPE_PARENTS=1` (cap 3). Do not delete a parent test unless that parent's plan lists the id as `remove`.
 
-Page objects stay in `playwright_automation/pages/<slug>.page.ts`.
+Page objects stay in `playwright_automation/pages/<slug>.page.ts` and extend `BaseStorybookPage`.
+
+Slotted content is not a direct child of the host when the component uses light DOM (`shadow: false`). Stencil reparents those nodes under internal wrappers (for example `modus-wc-navbar` puts `slot="main-menu"` under the toolbar). Use `this.slot('name')` from the base page. Do not write `host > [slot="..."]`.
 
 ## Notes
 
