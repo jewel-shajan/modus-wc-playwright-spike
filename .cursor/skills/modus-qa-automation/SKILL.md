@@ -2,7 +2,7 @@
 name: modus-qa-automation
 description: >-
   QA automation policy for trimble-oss/modus-wc-2.0: Playwright handoff after
-  green CI, separate qa-review approval, one verdict comment, gate vs verdict,
+  green CI, one qa-review approval per commit, one verdict comment, gate vs verdict,
   graph-aware Storybook coverage, and exact QA headers.
 disable-model-invocation: true
 ---
@@ -25,10 +25,10 @@ QA wakes on **label added** only (`qa-full`, `qa-rerun`, `qa-skip`). Independent
 2. A user in `QA_REQUEST_LOGINS` (or `QA_GITHUB_LOGINS` when the request list is unset) comments `ready for QA`.
 3. CI syncs cases, pushes them, and runs the graph-scoped suite. The bot does not approve.
 4. QA reads the test diff and the Playwright comment. Wrong locators or weak assertions stay unapproved.
-5. `jewel-shajan` or `Kavin-Trimble` approves the `qa-review` deployment for that same commit. Either approval is enough.
-6. Merge also needs the required checks and a fresh CI run on the bot commit.
+5. `jewel-shajan` or `Kavin-Trimble` approves the one `qa-review` deployment. Either approval is enough.
+6. Merge also needs the required checks on that same commit.
 
-A human push cancels a waiting `qa-review`. Comment `ready for QA` again only after CI is green. A refused comment (wrong user, or checks still running or failing) is posted on the pull request and does not change the `qa-playwright` status.
+A new commit cancels the approval that is still waiting and asks for approval again. `ready for QA` does not start another approval. A refused comment (wrong user, or checks still running or failing) is posted on the pull request and does not change the `qa-playwright` status.
 
 Workflow files: `.github/workflows/qa-playwright-cursor.yml`, `.github/workflows/qa-approval.yml`. `issue_comment` runs the workflow from the default branch.
 
