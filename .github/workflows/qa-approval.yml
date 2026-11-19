@@ -1,21 +1,103 @@
 name: QA Approval
 
+# Human approval for the commit that qa-playwright already marked green.
+# QA Playwright dispatches this workflow. It does not run on an ordinary push,
+# so a pull request does not sit on "Waiting for review" before the suite exists.
+#
+# A later human push cancels a review that is still waiting. The bot commit that
+# syncs Playwright cases does not cancel itself: that commit is the one QA reviews.
+#
+# Environment qa-review reviewers are jewel-shajan and Kavin-Trimble. Either one
+# may approve. Dependabot uses qa-review-bot-bypass so dependency PRs are not
+# held for a Playwright handoff.
+
 on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request that passed qa-playwright
+        required: true
+        type: string
   pull_request:
+    types: [synchronize, opened, reopened]
     branches: [main]
 
 permissions: {}
 
-# Each push used to start a new qa-review deployment while older ones stayed
-# "waiting", so the PR kept showing Expected even after a later run succeeded.
-concurrency:
-  group: qa-approval-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
-  qa-approval:
+  dependabot-bypass:
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
-    environment: ${{ (github.event.pull_request.user.login != 'dependabot[bot]' && github.event.pull_request.user.login != 'github-actions[bot]') && 'qa-review' || 'qa-review-bot-bypass' }}
+    environment: qa-review-bot-bypass
     steps:
-      - name: QA Approved
-        run: echo "QA has approved this PR"
+      - name: Dependabot bypass
+        run: echo "Dependabot pull requests skip the qa-review reviewers."
+
+  invalidate:
+    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      deployments: write
+    steps:
+      - name: Cancel a review waiting on an older commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          gh run list --workflow "QA Approval" --branch "$HEAD_REF" --limit 20 \
+            --json databaseId,status,event \
+            --jq '.[] | select(.event=="workflow_dispatch" and (.status=="queued" or .status=="in_progress" or .status=="waiting" or .status=="pending" or .status=="requested")) | .databaseId' \
+            | while read -r id; do
+                [ -n "$id" ] || continue
+                gh run cancel "$id" || true
+              done
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/deployments?environment=qa-review&per_page=20" \
+            --jq ".[] | select(.sha != \"${HEAD_SHA}\") | .id" \
+            | while read -r id; do
+                [ -n "$id" ] || continue
+                gh api --method POST "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" \
+                  -f state=inactive \
+                  -f description="Superseded by a new commit. Comment ready for QA again after CI is green." \
+                  || true
+              done
+
+  qa-approval:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      statuses: read
+    environment: qa-review
+    steps:
+      - name: Confirm qa-playwright is green and the approver is allowed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          state=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/status" \
+            --jq '[.statuses[] | select(.context=="qa-playwright")][0].state // "missing"')
+          if [ "$state" != "success" ]; then
+            echo "qa-playwright on ${GITHUB_SHA} is ${state}. Approval stays closed."
+            exit 1
+          fi
+          approvers=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/approvals" \
+            --jq '[.[] | select(.state=="approved") | .user.login] | join(" ")')
+          allowed="jewel-shajan Kavin-Trimble"
+          ok=false
+          for login in $approvers; do
+            for allowed_login in $allowed; do
+              if [ "$login" = "$allowed_login" ]; then
+                ok=true
+              fi
+            done
+          done
+          if [ "$ok" != true ]; then
+            echo "Approval must come from jewel-shajan or Kavin-Trimble. Recorded approvers: ${approvers:-none}."
+            exit 1
+          fi
+          echo "QA approved ${GITHUB_SHA} for pull request ${{ inputs.pr_number }} by: ${approvers}"
