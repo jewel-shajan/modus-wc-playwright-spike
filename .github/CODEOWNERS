@@ -1,2 +1,6 @@
 # Global reviewers - these users will be requested for review on all changes
 * @trimble-oss/MWC-Maintainers
+
+# Playwright cases, including the bot commit from QA Playwright, are reviewed by
+# the QA approvers. The qa-review environment approval is still required.
+/playwright_automation/ @jewel-shajan @Kavin-Trimble
