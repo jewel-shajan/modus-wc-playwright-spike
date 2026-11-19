@@ -1,8 +1,9 @@
 ---
 name: modus-qa-automation
 description: >-
-  QA automation policy for trimble-oss/modus-wc-2.0: one verdict comment,
-  gate vs verdict, graph-aware Storybook coverage, and exact QA headers.
+  QA automation policy for trimble-oss/modus-wc-2.0: Playwright handoff after
+  green CI, one qa-review approval per commit, one verdict comment, gate vs verdict,
+  graph-aware Storybook coverage, and exact QA headers.
 disable-model-invocation: true
 ---
 
@@ -16,9 +17,25 @@ QA wakes on **label added** only (`qa-full`, `qa-rerun`, `qa-skip`). Independent
 
 **ONE COMMENT:** one PR **conversation** comment per wake (`add_issue_comment`). Never a second `## QA PASSED/FAILED` on the same wake — **not** in walkthrough reviews, **not** in a follow-up review after the human nudges you. Tests pass + visual fail = one `## QA FAILED — visual` with dimensions table.
 
+## Playwright handoff and merge
+
+`ready for QA` updates and runs Playwright. It is not merge approval.
+
+1. Required CI on the latest commit is green. That includes Merge Gate, spelling, accessibility, Chromium, and every other check except `qa-approval` and `qa-playwright`.
+2. A user in `QA_REQUEST_LOGINS` (or `QA_GITHUB_LOGINS` when the request list is unset) comments `ready for QA`.
+3. CI syncs cases, pushes them, and runs the graph-scoped suite. The bot does not approve.
+4. QA reads the test diff and the Playwright comment. Wrong locators or weak assertions stay unapproved.
+5. `jewel-shajan` or `Kavin-Trimble` approves the one `qa-review` deployment. Either approval is enough.
+6. Merge also needs the required checks on that same commit.
+
+A new commit cancels the approval that is still waiting and asks for approval again. `ready for QA` does not start another approval. A refused comment (wrong user, or checks still running or failing) is posted on the pull request and does not change the `qa-playwright` status.
+
+Workflow files: `.github/workflows/qa-playwright-cursor.yml`, `.github/workflows/qa-approval.yml`. `issue_comment` runs the workflow from the default branch.
+
 ## Mindset
 
 - npm/lint/test is a **gate**, never a **verdict**.
+- `ready for QA` is a **handoff**, never a **merge approval**.
 - `## QA PASSED` requires visual evidence when the diff touches `.scss`, `.tailwind.ts`, component `.tsx/.ts`, or stories.
 - Never mark a scenario pass without a screenshot.
 - Max **3 browser targets** unless human AC names more.

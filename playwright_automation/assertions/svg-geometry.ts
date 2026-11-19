@@ -37,6 +37,9 @@ export const TRIMBLE_WORDMARK_VIEWBOX = '0 0 106 32';
 export const CONNECT_EMBLEM_VIEWBOX = '0 0 32 32';
 export const CONNECT_WORDMARK_VIEWBOX = '0 0 67 30';
 
+/** Trimble Developer Console self-contained wordmark (`trimble-developer.svg`). */
+export const DEVELOPER_CONSOLE_WORDMARK_VIEWBOX = '0 0 114 32';
+
 /** Default Trimble emblem and wordmark paths use this class. */
 export const TRIMBLE_ACCENT_FILL = {
   selector: '.logo-accent',

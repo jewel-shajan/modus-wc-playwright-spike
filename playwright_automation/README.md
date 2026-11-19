@@ -13,7 +13,7 @@ Fresh local run, 10 Nov 2026, Chromium, one worker, Storybook started by Playwri
 | Was a method recommended before anyone ran it? | Research looked at Jest, bare axe, the QA sheet, Storybook `play` functions, and Chromatic / Argos / Playwright. The recommendation below follows the runs, not the research note. |
 | What was tried, in order? | Jest and `a11y-check.yml` stay (structure and default-state axe). Storybook `play` was dropped so public docs stay free of test code. Playwright on the Storybook iframe is what went green. An always-on generator (RAG, AST scaffold, judge, circuit breaker) was added later and never run against a real PR. That layer is removed. |
 | What does each option cost, and what does it cover? | See the cost table. This package is the $0 row. |
-| Which AI, and what does it cost? | A QA comment `ready for QA` starts Cursor CLI in GitHub Actions on the QA account, model Composer 2.5. Tokens are spent only for that comment. There is no always-on generator and no laptop run of that sync. |
+| Which AI, and what does it cost? | After required CI is green, an allowlisted comment `ready for QA` starts Cursor CLI in GitHub Actions on the QA account, model Composer 2.5. Tokens are spent only for that comment. `jewel-shajan` or `Kavin-Trimble` approves the one `qa-review` deployment, and a later commit asks for that approval again. There is no always-on generator and no laptop run of that sync. |
 | What changes day to day? | Run the commands below on the component you touched. Jest (`npm test`) and `a11y-check.yml` stay as they are. Pixel baselines are not in this package. |
 
 Public `*.stories.ts` files stay documentation. Tests live here and open the iframe URL (`/iframe.html?id=...`).
@@ -32,7 +32,7 @@ Lane B (screenshots) is not started. If it starts, capture baselines on Ubuntu C
 
 ## Limits (why this is not a full Go)
 
-- Creating, updating, and deleting cases happens in GitHub Actions when QA comments `ready for QA`. Cursor CLI uses the QA account and Composer 2.5. The workflow then runs the graph-scoped suite and blocks merge until status `qa-playwright` is green. See [`.github/workflows/qa-playwright-cursor.yml`](../.github/workflows/qa-playwright-cursor.yml).
+- Creating, updating, and deleting cases happens in GitHub Actions when an allowlisted user comments `ready for QA` and Merge Gate, spelling, accessibility, Chromium, and every other check except `qa-approval` / `qa-playwright` are already green. Cursor CLI uses the QA account and Composer 2.5. The workflow runs the graph-scoped suite. Merge still waits for the one `qa-review` approval, and a new commit asks for that approval again. See [`.github/workflows/qa-playwright-cursor.yml`](../.github/workflows/qa-playwright-cursor.yml).
 - Chromium is the pull-request check. Firefox and WebKit run on the nightly schedule and on a manual workflow run. Turn the check into a required status in branch protection after it is green on `main`.
 - `a11y-check.yml` stays until every component has a real-state axe test here. Axe failures are not skipped.
 - One automatic retry in CI, zero locally. One worker. Logo accent fill flaked at two workers.
@@ -104,9 +104,9 @@ HTML report: `npm run report:html`.
 
 `.github/workflows/playwright.yml` checks out the branch, runs `npm ci` and `npm run build:ci`, then Playwright starts `storybook dev` on port 6006. It does not deploy, and it does not write tests.
 
-`.github/workflows/qa-playwright-cursor.yml` is the run that writes tests. It starts only when an allowlisted QA user comments `ready for QA`. Cursor CLI (`CURSOR_API_KEY` from the QA account, `--model composer-2.5`) reads the component graph, the pull request, the linked issue, and the master sheet CSV, then creates, updates, or deletes cases. The workflow pushes those test files, runs the graph-scoped Chromium suite (changed component plus up to three `reverseImpact` parents), and comments `## QA Playwright PASSED` or `## QA Playwright FAILED` with the suite, test name, assertion error, and a link to the HTML report. It does not merge. Require the `qa-playwright` status on `main`. A new commit needs another `ready for QA` comment.
+`.github/workflows/qa-playwright-cursor.yml` is the run that writes tests. It starts when an allowlisted user comments `ready for QA` and required CI is already green on that commit. Cursor CLI (`CURSOR_API_KEY` from the QA account, `--model composer-2.5`) reads the component graph, the pull request, the linked issue, and the master sheet CSV, then creates, updates, or deletes cases. The workflow pushes those test files, runs the graph-scoped Chromium suite (changed component plus up to three `reverseImpact` parents), and comments `## QA Playwright PASSED` or `## QA Playwright FAILED` with the suite, test name, assertion error, and a link to the HTML report. The Playwright comment is not an approval. [QA Approval](../.github/workflows/qa-approval.yml) is one check on the pull request. `jewel-shajan` or `Kavin-Trimble` approves it, and a new commit asks for that approval again. Older waiting approvals are cancelled so only one is pending.
 
-Set Actions variable `QA_GITHUB_LOGINS` and secret `CURSOR_API_KEY`. Optional secret `MASTER_SHEET_CSV` is the sheet export. The prompt file on the default branch is what the CLI follows.
+Set Actions variable `QA_REQUEST_LOGINS` (or `QA_GITHUB_LOGINS`) and secret `CURSOR_API_KEY`. Optional secret `MASTER_SHEET_CSV` is the sheet export. The `qa-review` environment required reviewers are `jewel-shajan` and `Kavin-Trimble`. Either one can approve. The prompt file on the default branch is what the CLI follows. `issue_comment` workflows run from the default branch, so this handoff starts after these workflow files are on `main`.
 
 | Trigger | Browsers |
 | --- | --- |
@@ -139,6 +139,8 @@ playwright_automation/
 ```
 
 Shared navigation and event listeners stay in fixtures and assertions. A listener is armed before the click or key. Starting both together drops the event and the test hangs until timeout.
+
+Slotted nodes on light-DOM hosts (`shadow: false`) are not direct children of the custom element. Page objects use `BaseStorybookPage.slot(name)`, which looks for `[slot="name"]` anywhere under the host. A `>` combinator (`modus-wc-navbar > [slot="main-menu"]`) misses content that Stencil moves under an internal wrapper such as the navbar toolbar.
 
 ## QA Master Sheet (Google)
 

@@ -879,7 +879,12 @@ export const InlineEditing: Story = {
           const container = document.createElement('div');
           container.style.width = '100%';
 
-          const datePicker = document.createElement('modus-wc-date');
+          const datePicker = document.createElement(
+            'modus-wc-date'
+          ) as HTMLElement & {
+            bordered: boolean;
+            value: string;
+          };
           datePicker.value = value as string;
           datePicker.style.width = '100%';
           datePicker.bordered = false;

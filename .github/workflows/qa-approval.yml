@@ -1,5 +1,10 @@
 name: QA Approval
 
+# One approval per pull request. jewel-shajan or Kavin-Trimble approves the
+# qa-review environment. Either one is enough. A new commit cancels the
+# approval that is still waiting and asks for approval of the new commit.
+# Dependabot pull requests use qa-review-bot-bypass.
+
 on:
   pull_request:
     branches: [main]

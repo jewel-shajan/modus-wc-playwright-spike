@@ -1,0 +1,20 @@
+---
+description: Playwright QA handoff. ready for QA runs only after CI is green. One qa-review approval is required again after each commit.
+globs:
+  - .github/workflows/qa-playwright-cursor.yml
+  - .github/workflows/qa-approval.yml
+  - .github/prompts/qa-playwright-sync.md
+  - playwright_automation/**/*
+alwaysApply: false
+---
+
+# Playwright QA handoff
+
+`ready for QA` syncs and runs Playwright cases. It does not approve a pull request and it does not merge.
+
+- Accept the comment only when Merge Gate, spelling, accessibility, Chromium, and every other check except `qa-approval` and `qa-playwright` are already green on the latest commit.
+- Who may comment is `QA_REQUEST_LOGINS`, or `QA_GITHUB_LOGINS` when that request list is unset. Post a pull request comment when the author is not on the list or when checks are still running or failing. Do not write a `qa-playwright` status for that refusal.
+- The sync may edit `playwright_automation/` only. The workflow pushes those cases and runs the graph-scoped suite.
+- QA Approval is one check. `jewel-shajan` or `Kavin-Trimble` approves the `qa-review` deployment. Either approval is enough. Review the generated pages, specs, and assertions before approving.
+- A new commit cancels the approval that is still waiting and asks for approval of the new commit. Do not start a second QA Approval workflow.
+- Branch protection on `main` requires `merge-gate`, `spellcheck`, `a11y-check`, `chromium`, `qa-playwright`, and a successful `qa-review` deployment, all on the same head commit.

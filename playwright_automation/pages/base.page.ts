@@ -20,6 +20,15 @@ export abstract class BaseStorybookPage {
     return this.page.locator(this.hostSelector).first();
   }
 
+  /**
+   * Light-DOM hosts (`shadow: false`) move slotted nodes under internal
+   * wrappers, so they are not direct children of the custom element.
+   * Descendants of the host match both that tree and shadow hosts.
+   */
+  slot(slotName: string): Locator {
+    return this.host.locator(`[slot="${slotName}"]`).first();
+  }
+
   async gotoStory(
     options: Omit<StoryUrlOptions, 'storyId'> & { storyId: string }
   ): Promise<void> {
