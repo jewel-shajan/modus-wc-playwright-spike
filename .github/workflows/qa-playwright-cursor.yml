@@ -3,8 +3,9 @@ name: QA Playwright
 # Starts when an allowlisted user comments "ready for QA" on a pull request,
 # and only after required CI is already green on that commit. Cursor CLI syncs
 # graph-scoped Playwright cases, this workflow runs them, and posts the result.
-# It does not approve and it does not merge. A green run then starts QA Approval,
-# which waits on the qa-review environment for jewel-shajan or Kavin-Trimble to approve that commit.
+# It does not approve and it does not merge. QA Approval is a separate check:
+# jewel-shajan or Kavin-Trimble approves the qa-review environment, and a new
+# commit asks for that one approval again.
 #
 # Settings → Secrets and variables → Actions:
 # - Secret CURSOR_API_KEY: API key from the QA Cursor account.
@@ -17,7 +18,6 @@ name: QA Playwright
 # Branch protection on main must require merge-gate, spellcheck, a11y-check,
 # chromium, the qa-playwright status, and a successful qa-review deployment.
 # The prompt and the report script are read from the default branch, not the PR branch.
-# A later human push cancels a pending qa-review and needs a new "ready for QA" comment.
 
 on:
   issue_comment:
@@ -632,7 +632,7 @@ jobs:
           if [ "$result" = "success" ]; then
             {
               echo
-              echo "Playwright is green on \`${sha}\`. This run does not approve the pull request. jewel-shajan or Kavin-Trimble reviews the test diff and approves the \`qa-review\` deployment for this commit. Merge stays closed until that approval and the required CI checks are green on this same commit."
+              echo "Playwright is green on \`${sha}\`. This run does not approve the pull request. jewel-shajan or Kavin-Trimble approves the single \`qa-review\` deployment. A later commit asks for that approval again."
             } >> "$RUNNER_TEMP/qa-comment.md"
           fi
 
@@ -650,11 +650,6 @@ jobs:
             -f context=qa-playwright \
             -f description="$description" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-          if [ "$result" = "success" ]; then
-            gh workflow run "QA Approval" --ref "$HEAD_REF" -f pr_number="$PR_NUMBER" \
-              || echo "QA Approval was not started. The workflow file must be on the default branch, and this token needs permission to dispatch it."
-          fi
 
           if [ "$result" != "success" ]; then
             exit 1
