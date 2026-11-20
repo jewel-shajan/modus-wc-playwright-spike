@@ -98,7 +98,7 @@ playwright_automation/
 | `.github/workflows/qa-approval.yml` | Environment approval gate (`qa-review`) |
 | `.github/prompts/qa-playwright-sync.md` | Prompt given to the Cursor CLI agent |
 | `.github/CODEOWNERS` | Covers `/playwright_automation/` |
-| `.github/workflows/component-graph-check.yml`, `merge-gate.yml`, `a11y-check.yml`, `spellcheck.yml` | Neighbouring checks. `merge-gate`, `spellcheck`, `a11y-check` and the `chromium` job are the required checks the QA flow waits for |
+| `.github/workflows/component-graph-check.yml`, `merge-gate.yml`, `a11y-check.yml`, `spellcheck.yml` | Related checks. `merge-gate`, `spellcheck`, `a11y-check` and the `chromium` job are the required checks the QA flow waits for |
 
 ### Per-file responsibilities (key files)
 
@@ -161,7 +161,7 @@ flowchart TB
 | `props` | Property to DOM effects; state changes; events (`inputChange`, and others per component). |
 | `a11y` | axe-core violations (WCAG 2.0/2.1 A and AA); ARIA snapshots; Switch keyboard and focus checks. |
 | `css` | Design-token resolution across the six themes. |
-| `shadow-dom` | Behaviour inside a `*-shadow-host` parent story that wraps the component in another shadow root. |
+| `shadow-dom` | Behavior inside a `*-shadow-host` parent story that wraps the component in another shadow root. |
 | `show-code` | Docs "Show code" snippet and canvas parity. |
 | `performance` | Wall-clock budgets for initial render and for an update. |
 
@@ -201,7 +201,7 @@ Limit: all of this assumes shadow roots are **open** (Stencil's default). A clos
 | Parallelism | `fullyParallel: false`, `workers: 1` |
 | Retries | `CI ? 1 : 0`; `forbidOnly` in CI |
 | Reporters | `list`, `html` (to `reports/`), `junit` (`reports/results.xml`) |
-| Artefacts | Trace, screenshot and video retained on failure |
+| Artifacts | Trace, screenshot and video retained on failure |
 | Viewport | 1280 × 720 |
 | Projects | `chromium`, `firefox`, `webkit` |
 | Web server | Local: `npm run storybook:start`. CI: `npx storybook dev -p 6006 --ci --no-open --exact-port`. `url` is hard-coded to `http://127.0.0.1:6006`. Skipped when `PLAYWRIGHT_SKIP_WEBSERVER=1` or `STORYBOOK_URL` points to a remote host. |
@@ -267,7 +267,7 @@ flowchart LR
 | --- | --- |
 | Pull request to `main` | Chromium only, scoped tests |
 | Nightly 02:30 UTC, manual dispatch | Chromium, Firefox, WebKit; unscoped |
-| Artefacts | `playwright-report-<browser>`, kept 7 days |
+| Artifacts | `playwright-report-<browser>`, kept 7 days |
 
 Latest PR run (run `44533696367`, chromium): job about 4 min. Step times: install 59 s, build components 90 s, install browser 22 s, **tests 58 s**.
 
@@ -296,7 +296,7 @@ sequenceDiagram
 ### 6.8 Reporting
 
 - **Console**: `list`.
-- **HTML**: `reports/` (also `playwright-report-<browser>` artefact).
+- **HTML**: `reports/` (also `playwright-report-<browser>` artifact).
 - **JUnit**: `reports/results.xml`, consumed by `report-ci.mjs`.
 - **PR surface**: a comment with the result and a `qa-playwright` commit status.
 
@@ -317,7 +317,7 @@ Test counts per file (static `test()` calls; the two `css` files expand over 6 t
 
 Navbar and Table each have one generated "archetype" test per category (titles such as `should cover default stories for navbar [navbar-stories]`). I did not audit their bodies beyond the titles and the fact that they are 12 to 19 lines per file.
 
-### Behaviours covered (from test titles)
+### Behaviors covered (from test titles)
 
 | Area | Covered |
 | --- | --- |
@@ -376,13 +376,13 @@ Each item is tied to code or to a run. Severity and fixes are in the review docu
 | 8 | **axe runs on the default theme only** (default and disabled for Switch; two variants for Logo). axe tags stop at WCAG 2.1 AA, while the repo guidelines target WCAG 2.2. | `fixtures/a11y.ts`, `*/a11y.spec.ts` |
 | 9 | **Switch tests pin `aria-checked=""` (checked), `aria-checked` absent (unchecked) and `aria-disabled=""`.** The test comment says "Boolean true is rendered as an empty attribute, not the string 'true'". The tests lock in that rendering, although an empty value is not a valid ARIA boolean. | `switch/props.spec.ts` lines 40–45, `switch/a11y.spec.ts` line 72 |
 | 10 | **Tab-focus check never asserts focus**, and the "keyboard focus cycle" uses programmatic `.focus()`. | `switch/*.spec.ts` |
-| 11 | **Generated Navbar and Table tests are shallow and their titles overstate them.** The a11y tests are titled "should pass axe on interactive state" but only analyse the default render. `navbar/props.spec.ts` ("cover public props for navbar") checks only the embedded Logo's `logo-name` and `condensed`; `table/props.spec.ts` checks the `density` and `hover` classes. | `navbar/*.spec.ts`, `table/*.spec.ts` |
+| 11 | **Generated Navbar and Table tests are shallow and their titles overstate them.** The a11y tests are titled "should pass axe on interactive state" but only analyze the default render. `navbar/props.spec.ts` ("cover public props for navbar") checks only the embedded Logo's `logo-name` and `condensed`; `table/props.spec.ts` checks the `density` and `hover` classes. | `navbar/*.spec.ts`, `table/*.spec.ts` |
 | 11a | **Event tests do not check the payload.** `expectHostEventOnAction` only confirms the event fired; the `detail` (`target.checked`) is never read, so a click that fires `inputChange` without toggling would still pass. | `assertions/events.ts`, `switch/props.spec.ts` |
 | 12 | **`tsc --noEmit` reports 6 errors** and CI has no typecheck step. | `tsc` run |
 | 13 | **Plan tooling has defects.** `apply-plan` removal splits on `test(`, so deleting the last test in a file removes the closing braces; ID matching is by substring. `build-plan` never writes `remove` rows and its `conflicts` list is always empty, so `NEED CLARIFICATION` cannot occur. The issue lookup falls back to any `#N` and resolved to the PR itself in the generated plans (`Issue #8`). `agent:apply` is not used in CI. | `apply-plan.ts`, `build-plan.ts`, `git-context.ts` |
 | 14 | **`run-scoped` always adds `--project=<default>`**, then appends extra args. The workflow also passes `--project=chromium`, so the flag appears twice; a different value would run two projects. | `run-scoped.ts`, `playwright.yml` |
 | 15 | **`git-context` builds shell commands by string interpolation** (`execSync` with `PR_NUMBER`). | `git-context.ts` |
-| 16 | **LLM-authored code runs in a job that holds write tokens.** The test step unsets `GH_TOKEN`, but the job has `contents: write` and `pull-requests: write`. | `qa-playwright-cursor.yml` |
+| 16 | **LLM-authored code runs in a job that holds write tokens.** The test step clears `GH_TOKEN`, but the job has `contents: write` and `pull-requests: write`. | `qa-playwright-cursor.yml` |
 | 17 | **No visual regression, no RTL or reduced-motion checks, no framework-wrapper (React, Angular, Vue) smoke tests, no Figma comparison.** | Absence from `tests/`; README "Out of this package" |
 | 18 | **Documentation drift.** README reports 48 passed and Switch and Logo only. It references `.cursor/GOOGLE-MCP-SETUP.md` and the skill `playwright-pr-orchestrator`; neither exists. Generated plans also point at the missing skill. `SPIKE-REPORT-1449.md` limits 1, 2 and 4 are out of date. | File search |
 | 19 | **Unverified:** whether the bot's push (made with the default `GITHUB_TOKEN`) triggers required checks on the new commit SHA. | Not tested |

@@ -1,6 +1,6 @@
 # Architecture Review: Playwright Automation for Modus Web Components
 
-Reviewer stance: Senior SDET. Companion to [`ARCHITECTURE.md`](./ARCHITECTURE.md), which describes the system as built.
+Reviewer stance: senior test automation engineer. Companion to [`ARCHITECTURE.md`](./ARCHITECTURE.md), which describes the system as built.
 
 **Evidence base.** The code at HEAD `7c82097`, a local baseline run (60 passed, chromium, serial, about 1.7 min), a 4-worker run, a probe of how Storybook handles URL args, `tsc --noEmit`, and the latest PR CI run (`44533696367`).
 **Not verified:** anything marked *unverified*. Code snippets below were written for this review and have **not** been run against the repo; treat them as starting points and run the suite after applying.
@@ -11,7 +11,7 @@ Reviewer stance: Senior SDET. Companion to [`ARCHITECTURE.md`](./ARCHITECTURE.md
 
 The foundation is sound. The Page Object layer is small and consistent, locators mostly pierce shadow DOM correctly, the suite is stable (no flakes in the baseline), and the PR-scoped pipeline is a real strength. The risks are about **how much a green check can be trusted** and **how fast and honest the signal is**:
 
-1. Some tests cannot fail, or pin a likely product defect as expected behaviour.
+1. Some tests cannot fail, or pin a likely product defect as expected behavior.
 2. The suite is forced serial by wall-clock performance tests that also gate merges.
 3. A PR can go green while changed components have no tests.
 4. Test code is not type-checked, and the plan tooling has correctness bugs.
@@ -148,7 +148,7 @@ Also consider sharding (`--shard=1/2`) once the suite grows.
 - `switch/props.spec.ts` lines 40–45 assert `aria-checked` is `''` when checked and absent when unchecked. `switch/a11y.spec.ts` line 72 asserts `aria-disabled` is `''`. The test's own comment calls this "an empty attribute, not the string 'true'".
 - `expectHostEventOnAction` confirms the event fired but does not read `detail`. The "click" test would pass if the event fired and the switch did not toggle.
 
-**Why it matters.** An empty `aria-checked` is not a valid ARIA boolean, so these tests turn a possible product defect into a required behaviour. A fix in the component would break the tests.
+**Why it matters.** An empty `aria-checked` is not a valid ARIA boolean, so these tests turn a possible product defect into a required behavior. A fix in the component would break the tests.
 
 **Refinement.** Assert the user-visible contract (native state, role, name), and raise the attribute rendering as a separate component issue.
 
@@ -221,7 +221,7 @@ const computed = getComputedStyle(el).getPropertyValue(cssPropertyName); // use 
 | `remove` rows are never generated; `conflicts` is always empty | `build-plan.ts` | `NEED CLARIFICATION` cannot be produced |
 | Fallback `#(\d+)` for the linked issue | `git-context.ts` `parseLinkedIssueNumber` | Generated plans show `Issue #8`, whose body equals the PR template, so it very likely resolves to the PR itself |
 | Loose `includes` matching on tag names | `master-sheet.ts` `sheetRowsForTag` | Rows for `button-group` can be pulled in for `button` |
-| Regex title indexer cannot expand `${theme}` loops; ordinal IDs such as `LOGO-PROPS-1` | `spec-index.ts` | Parameterised tests collapse to one plan row; IDs change when tests are reordered |
+| Regex title indexer cannot expand `${theme}` loops; ordinal IDs such as `LOGO-PROPS-1` | `spec-index.ts` | Parameterized tests collapse to one plan row; IDs change when tests are reordered |
 
 `agent:apply` is not used in CI (the QA prompt tells the agent not to run it), so the blast radius is local use today. Fix it before it is used more widely.
 
@@ -380,7 +380,7 @@ Check that `wcag22aa` flags new violations; if it does, record them as component
 
 | Pattern | Example | Suggestion |
 | --- | --- | --- |
-| CSS class / structure | `input.modus-wc-toggle[type="checkbox"]` | `getByRole('switch', { name })` for behaviour tests; keep CSS only where the class is the thing under test (geometry, tokens) |
+| CSS class / structure | `input.modus-wc-toggle[type="checkbox"]` | `getByRole('switch', { name })` for behavior tests; keep CSS only where the class is the thing under test (geometry, tokens) |
 | Positional | Logo `.logo-combined-wordmark svg, .modus-wc-logo.logo-full svg` with `.last()` | Scope to the variant under test, or assert on the accessible name (`getByRole('img', { name })`) |
 | Manual `shadowRoot` | `events.ts`, `shadow-dom.spec.ts` | Playwright already pierces open shadow roots; drop the `evaluate` + `shadowRoot.querySelector` code |
 
@@ -459,7 +459,7 @@ const args = ['playwright', 'test', ...(hasProject ? [] : [`--project=${project}
 | Switch "should show focus-visible outline after Tab" | Does not assert the input is focused | `await page.keyboard.press('Tab'); await expect(input).toBeFocused();` then check the outline |
 | Switch "keyboard focus cycle" | Uses programmatic `.focus()` / `.blur()` | Drive with `Tab` and `Shift+Tab` |
 | Switch inputChange on click | Checks only that the event fired | Use M3 and assert `checked` |
-| Switch size | Only `lg` | Parameterise over all sizes |
+| Switch size | Only `lg` | Parameterize over all sizes |
 | Navbar "props" | Tests only the embedded Logo | Cover navbar props (`visibility`, slots) or retitle |
 | Navbar / Table "a11y on interactive state" | Default render only | Open the menu / change state before axe, or retitle |
 | Navbar main-menu slot | `toBeAttached` only | Assert visibility and role |
@@ -467,11 +467,11 @@ const args = ['playwright', 'test', ...(hasProject ? [] : [`--project=${project}
 
 ### M12. Token exposure
 
-`qa-playwright-cursor.yml` runs LLM-authored test code in a job that has `contents: write` and `pull-requests: write`. The test step unsets `GH_TOKEN`, which helps, but the job's other credentials remain, and the prompt inputs (PR body, issue text, master sheet) are influenced by people.
+`qa-playwright-cursor.yml` runs LLM-authored test code in a job that has `contents: write` and `pull-requests: write`. The test step clears `GH_TOKEN`, which helps, but the job's other credentials remain, and the prompt inputs (PR body, issue text, master sheet) are influenced by people.
 
 **Refinement.** Split into three jobs:
 
-1. `generate` (agent edits, `contents: read`) uploads the patch as an artefact.
+1. `generate` (agent edits, `contents: read`) uploads the patch as an artifact.
 2. `verify` (applies the patch, runs tests, `contents: read`, no secrets) uploads the report.
 3. `publish` (trusted code only, `contents: write`, `pull-requests: write`, `statuses: write`) pushes the commit and posts the comment.
 
@@ -501,7 +501,7 @@ const args = ['playwright', 'test', ...(hasProject ? [] : [`--project=${project}
 
 | Phase | Work | Effort | Result |
 | --- | --- | --- | --- |
-| 1 (about a day) | H5 typecheck; L1 deletions; M10; M7; M11 quick fixes; L4 doc fixes | Small | Cleaner baseline; no behaviour change |
+| 1 (about a day) | H5 typecheck; L1 deletions; M10; M7; M11 quick fixes; L4 doc fixes | Small | Cleaner baseline; no behavior change |
 | 2 | H3 + M3 (event payloads, native-state assertions); M1 readiness; M2 fixtures | Medium | Tests that can actually fail |
 | 3 | H2 perf split + parallel run; M6 static Storybook; M4 axe | Medium | About 2x faster test step; broader a11y |
 | 4 | H4 coverage visibility; H6 `apply-plan` and issue linking; M8 / M9; M12 job split | Medium | Trustworthy gate and safer automation |
